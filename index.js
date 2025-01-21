@@ -2,45 +2,56 @@ const express = require('express');
 const app = express();
 const { Client } = require('whatsapp-web.js');
 const puppeteer = require('puppeteer-core');
-const chromium = require('chrome-aws-lambda'); // Pacote para Chromium otimizado para ambientes serverless
+const chromium = require('chrome-aws-lambda');
+const qrcode = require('qrcode');  // Importa a biblioteca QRCode
 
 let qr_generated;
+let client;
 
+// Middleware para lidar com dados JSON no corpo da requisição
+app.use(express.json());
 
+async function startWhatsappClient() {
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath: await chromium.executablePath,
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+    });
 
-const browser = await puppeteer.launch({
-  headless: true,
-  executablePath: await chromium.executablePath, // Caminho correto para o Chromium serverless
-  args: chromium.args, // Argumentos necessários para o Chromium funcionar no ambiente serverless
-  defaultViewport: chromium.defaultViewport, // Definir o viewport
-});
+    client = new Client({
+      puppeteer: { browser }
+    });
 
-const client = new Client({
-  puppeteer: { browser }
-});
+    client.on("qr", (qr) => {
+      qr_generated = { qr, dataQrCodeGerado: new Date() };
+      console.log("");
+    });
 
-client.on("qr", (qr) => {
-  qr_generated = { qr, dataQrCodeGerado: new Date() };
-  console.log("");
-});
+    client.on('ready', () => {
+      console.log('WhatsApp is ready!');
+    });
 
-client.on('ready', () => {
-  console.log('WhatsApp is ready!');
-});
+    client.on('message', (message) => {
+      console.log('Received message:', message.body);
+      if (message.body === 'ping') {
+        message.reply('pong');
+      }
+    });
 
-client.on('message', (message) => {
-  console.log('Received message:', message.body);
-  if (message.body === 'ping') {
-    message.reply('pong');
+    await client.initialize();
+  } catch (error) {
+    console.error('Error starting WhatsApp client:', error);
   }
-});
+}
 
-await client.initialize()
-  .catch(error => console.error('Error starting WhatsApp client:', error))
+// Inicia o cliente
+startWhatsappClient();
 
-router.get('/get-qr-code', async (req, res) => {
-
-  if (!qr_generated.qr) {
+// Rota para obter o QR Code
+app.get('/get-qr-code', async (req, res) => {
+  if (!qr_generated || !qr_generated.qr) {
     return res.json({ message: "Tente em alguns segundos, QR Code ainda não está pronto." });
   }
 
@@ -55,8 +66,7 @@ router.get('/get-qr-code', async (req, res) => {
 });
 
 // Rota para enviar uma mensagem
-router.post('/send-message', async (req, res) => {
-
+app.post('/send-message', async (req, res) => {
   const { N_celular, mensagem } = req.body;
   if (!N_celular || !mensagem) {
     return res.status(400).json({ error: "Número de telefone e mensagem são obrigatórios." });
@@ -70,7 +80,6 @@ router.post('/send-message', async (req, res) => {
     return res.status(500).json({ error: "Erro ao enviar mensagem.", details: error.message });
   }
 });
-
 
 // Rota para verificar o status da API
 app.get('/', (req, res) => {
