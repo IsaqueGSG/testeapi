@@ -5,17 +5,17 @@ const puppeteer = require('puppeteer-core');
 const chromium = require('chrome-aws-lambda');
 const qrcode = require('qrcode');  // Importa a biblioteca QRCode
 
-let qr_generated = { qrCode: null, status: false, dataQrCodeGerado: null };
-let client;
-
 // Middleware para lidar com dados JSON no corpo da requisição
 app.use(express.json());
+
+let qr_generated = null; // Variável para armazenar o QR Code gerado
+let client;
 
 async function startWhatsappClient() {
   try {
     const browser = await puppeteer.launch({
       headless: true,
-      executablePath: await chromium.executablePath  || '/usr/bin/chromium-browser',
+      executablePath: await chromium.executablePath,
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
     });
@@ -24,11 +24,11 @@ async function startWhatsappClient() {
       puppeteer: { browser }
     });
 
-    client.on("qr", async (qr) => {
+    client.on('qr', async (qr) => {
       try {
-        const url = await qrcode.toDataURL(qr);
-        console.log("QR Code gerado");
-        qr_generated = { qrCode: url, status: false, dataQrCodeGerado: new Date() };
+        const qrCodeUrl = await qrcode.toDataURL(qr);
+        qr_generated = { qrCode: qrCodeUrl, status: false, dataQrCodeGerado: new Date() };
+        console.log('QR Code gerado com sucesso!');
       } catch (err) {
         console.error('Erro ao gerar QR Code:', err);
       }
@@ -36,7 +36,6 @@ async function startWhatsappClient() {
 
     client.on('ready', () => {
       console.log('WhatsApp is ready!');
-      qr_generated.status = true;
     });
 
     client.on('message', (message) => {
@@ -55,10 +54,17 @@ async function startWhatsappClient() {
 // Inicia o cliente
 startWhatsappClient();
 
+async function getClient() {
+  if (!client) {
+    throw new Error('Cliente do WhatsApp ainda não está inicializado.');
+  }
+  return client;
+}
+
 // Rota para obter o QR Code
 app.get('/get-qr-code', async (req, res) => {
-  if (!qr_generated.qrCode) {
-    return res.json({ message: "Tente em alguns segundos, QR Code ainda não está pronto." });
+  if (!qr_generated || !qr_generated.qrCode) {
+    return res.status(404).json({ message: 'QR Code ainda não está pronto. Tente novamente mais tarde.' });
   }
 
   res.status(200).json(qr_generated);
@@ -66,17 +72,17 @@ app.get('/get-qr-code', async (req, res) => {
 
 // Rota para enviar uma mensagem
 app.post('/send-message', async (req, res) => {
-  const { N_celular, mensagem } = req.body;
-  if (!N_celular || !mensagem) {
-    return res.status(400).json({ error: "Número de telefone e mensagem são obrigatórios." });
-  }
-
   try {
-    const result = await client.sendMessage(`55${N_celular}@c.us`, mensagem);
-    return res.status(200).json({ result });
+    const client = await getClient();
+    const { N_celular, mensagem } = req.body;
+    if (!N_celular || !mensagem) {
+      return res.status(400).json({ error: 'Número de telefone e mensagem são obrigatórios.' });
+    }
+    const response = await client.sendMessage(`55${N_celular}@c.us`, mensagem);
+    return res.status(200).json({ message: 'Mensagem enviada com sucesso!', response });
   } catch (error) {
-    console.error("Erro ao enviar mensagem:", error);
-    return res.status(500).json({ error: "Erro ao enviar mensagem.", details: error.message });
+    console.error('Erro ao enviar mensagem:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
