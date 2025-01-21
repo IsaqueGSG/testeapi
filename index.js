@@ -9,57 +9,41 @@ const qrcode = require('qrcode');  // Importa a biblioteca QRCode
 app.use(express.json());
 
 let qr_generated = null; // Variável para armazenar o QR Code gerado
-let client;
 
-async function startWhatsappClient() {
+const browser = await puppeteer.launch({
+  headless: true,
+  executablePath: await chromium.executablePath,
+  args: chromium.args,
+  defaultViewport: chromium.defaultViewport,
+});
+
+const client = new Client({
+  puppeteer: { browser }
+});
+
+client.on('qr', async (qr) => {
   try {
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath: await chromium.executablePath,
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-    });
-
-    client = new Client({
-      puppeteer: { browser }
-    });
-
-    client.on('qr', async (qr) => {
-      try {
-        const qrCodeUrl = await qrcode.toDataURL(qr);
-        qr_generated = { qrCode: qrCodeUrl, status: false, dataQrCodeGerado: new Date() };
-        console.log('QR Code gerado com sucesso!');
-      } catch (err) {
-        console.error('Erro ao gerar QR Code:', err);
-      }
-    });
-
-    client.on('ready', () => {
-      console.log('WhatsApp is ready!');
-    });
-
-    client.on('message', (message) => {
-      console.log('Received message:', message.body);
-      if (message.body === 'ping') {
-        message.reply('pong');
-      }
-    });
-
-    await client.initialize();
-  } catch (error) {
-    console.error('Error starting WhatsApp client:', error);
+    const qrCodeUrl = await qrcode.toDataURL(qr);
+    qr_generated = { qrCode: qrCodeUrl, status: false, dataQrCodeGerado: new Date() };
+    console.log('QR Code gerado com sucesso!');
+  } catch (err) {
+    console.error('Erro ao gerar QR Code:', err);
   }
-}
+});
 
-// Inicia o cliente
-startWhatsappClient();
+client.on('ready', () => {
+  console.log('WhatsApp is ready!');
+});
 
-async function getClient() {
-  if (!client) {
-    throw new Error('Cliente do WhatsApp ainda não está inicializado.');
+client.on('message', (message) => {
+  console.log('Received message:', message.body);
+  if (message.body === 'ping') {
+    message.reply('pong');
   }
-  return client;
-}
+});
+
+await client.initialize().catch((err) => { throw new Error(err) });
+
 
 // Rota para obter o QR Code
 app.get('/get-qr-code', async (req, res) => {
