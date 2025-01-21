@@ -1,40 +1,54 @@
-const qrcode = require('qrcode-terminal');
-const { Client } = require('whatsapp-web.js');
 const express = require('express');
-
 const app = express();
-const client = new Client({
-    puppeteer: {
+
+const { Client } = require('whatsapp-web.js');
+const puppeteer = require('puppeteer-core');
+
+// Função que inicializa o cliente do WhatsApp Web
+async function startWhatsappClient() {
+    const browser = await puppeteer.launch({
+        headless: true, // Rodar sem interface gráfica
+        executablePath: '/usr/bin/chromium-browser', // Caminho do Chromium em ambientes serverless (ajuste conforme necessário)
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu',
         ],
-        headless: true,
-    },
-    
+    });
+
+    const client = new Client({
+        puppeteer: { 
+            browser: browser,
+        }
+    });
+
+    client.on('qr', (qr) => {
+        console.log('QR Code:', qr); // Exibir o QR Code no log para escanear
+    });
+
+    client.on('ready', () => {
+        console.log('WhatsApp is ready!');
+    });
+
+    client.on('message', (message) => {
+        console.log('Received message:', message.body);
+        if (message.body === 'ping') {
+            message.reply('pong');
+        }
+    });
+
+    await client.initialize();
+}
+
+// Inicia o cliente
+startWhatsappClient().catch((error) => {
+    console.error('Error starting WhatsApp client:', error);
 });
 
-client.on('qr', (qr) => {
-    console.log('QR RECEIVED', qr);
-});
-
-client.on('ready', () => {
-    console.log('WhatsApp Web client is ready!');
-});
-
-client.on('message', async (msg) => {
-    console.log(`Received message: ${msg.body}`);
-    if (msg.body === '!ping') {
-        msg.reply('pong');
-    }
-});
-
-client.initialize();
 
 app.get('/', (req, res) => {
     res.send('WhatsApp bot is running!');
