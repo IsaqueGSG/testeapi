@@ -5,7 +5,7 @@ const puppeteer = require('puppeteer-core');
 const chromium = require('chrome-aws-lambda');
 const qrcode = require('qrcode');  // Importa a biblioteca QRCode
 
-let qr_generated;
+let qr_generated = { qrCode: null, status: false, dataQrCodeGerado: null };
 let client;
 
 // Middleware para lidar com dados JSON no corpo da requisição
@@ -25,14 +25,13 @@ async function startWhatsappClient() {
     });
 
     client.on("qr", async (qr) => {
-      await qrcode.toDataURL(qr, (err, url) => {
-        if (err) {
-          console.error('Erro ao gerar QR Code:', err);
-        } else {
-          console.log("QR Code gerado");
-          qr_generated = { qrCode: url, status: false, dataQrCodeGerado: new Date() };
-        }
-      });
+      try {
+        const url = await qrcode.toDataURL(qr);
+        console.log("QR Code gerado");
+        qr_generated = { qrCode: url, status: false, dataQrCodeGerado: new Date() };
+      } catch (err) {
+        console.error('Erro ao gerar QR Code:', err);
+      }
     });
 
     client.on('ready', () => {
@@ -58,7 +57,7 @@ startWhatsappClient();
 
 // Rota para obter o QR Code
 app.get('/get-qr-code', async (req, res) => {
-  if (!qr_generated || !qr_generated.qrCode) {
+  if (!qr_generated.qrCode) {
     return res.json({ message: "Tente em alguns segundos, QR Code ainda não está pronto." });
   }
 
