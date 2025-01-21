@@ -24,9 +24,18 @@ async function startWhatsappClient() {
       puppeteer: { browser }
     });
 
-    client.on("qr", (qr) => {
-      qr_generated = { qr, dataQrCodeGerado: new Date() };
-      console.log("");
+    client.on("qr", async (qr) => {
+      await qrcode.toDataURL(qr_generated.qr, (err, url) => {
+
+        if (err) {
+          console.error('Erro ao gerar QR Code:', err);
+        } else {
+          console.log("qr code gerado")
+          qr_generated = { qrCode: url, status: false, dataQrCodeGerado: qr_generated.dataQrCodeGerado };
+        }
+      })
+
+
     });
 
     client.on('ready', () => {
@@ -55,14 +64,7 @@ app.get('/get-qr-code', async (req, res) => {
     return res.json({ message: "Tente em alguns segundos, QR Code ainda não está pronto." });
   }
 
-  qrcode.toDataURL(qr_generated.qr, (err, url) => {
-    if (err) {
-      console.error('Erro ao gerar QR Code:', err);
-      res.status(500).json({ error: "Erro ao gerar QR Code." });
-    } else {
-      res.status(200).json({ qrCode: url, status: false, dataQrCodeGerado: qr_generated.dataQrCodeGerado });
-    }
-  });
+  res.status(200).json(qr_generated);
 });
 
 // Rota para enviar uma mensagem
