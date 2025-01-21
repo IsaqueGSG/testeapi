@@ -25,21 +25,19 @@ async function startWhatsappClient() {
     });
 
     client.on("qr", async (qr) => {
-      await qrcode.toDataURL(qr_generated.qr, (err, url) => {
-
+      await qrcode.toDataURL(qr, (err, url) => {
         if (err) {
           console.error('Erro ao gerar QR Code:', err);
         } else {
-          console.log("qr code gerado")
-          qr_generated = { qrCode: url, status: false, dataQrCodeGerado: qr_generated.dataQrCodeGerado };
+          console.log("QR Code gerado");
+          qr_generated = { qrCode: url, status: false, dataQrCodeGerado: new Date() };
         }
-      })
-
-
+      });
     });
 
     client.on('ready', () => {
       console.log('WhatsApp is ready!');
+      qr_generated.status = true;
     });
 
     client.on('message', (message) => {
@@ -60,7 +58,7 @@ startWhatsappClient();
 
 // Rota para obter o QR Code
 app.get('/get-qr-code', async (req, res) => {
-  if (!qr_generated || !qr_generated.qr) {
+  if (!qr_generated || !qr_generated.qrCode) {
     return res.json({ message: "Tente em alguns segundos, QR Code ainda não está pronto." });
   }
 
