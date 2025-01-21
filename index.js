@@ -15,7 +15,7 @@ async function startWhatsappClient() {
   try {
     const browser = await puppeteer.launch({
       headless: true,
-      executablePath: await chromium.executablePath,
+      executablePath: await chromium.executablePath  || '/usr/bin/chromium-browser',
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
     });
